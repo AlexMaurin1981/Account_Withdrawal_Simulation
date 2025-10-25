@@ -20,29 +20,26 @@ public class TransferServerImpl implements TransferServer {
     public TransferStatus processTransfer(TransferRequest transferRequest) {
 
         if (transferRequest == null) {
-            System.err.println("Error: Transfer request is null.");
-            return TransferStatus.ACCOUNT_NOT_FOUND;
+            throw new RuntimeException("Request is null");
+
         }
 
-        long toAccount = transferRequest.getToAccountId();// достаем из трансфера ID аккаунта получателя
-        long fromAccount = transferRequest.getFromAccount(); // достаем из трансфера ID аккаунта отправителя
+        long toAccountId = transferRequest.getToAccountId();
+        long fromAccountId = transferRequest.getFromAccount(); // достаем из трансфера ID аккаунта отправителя
 
-        Optional<Account> toAccountOptional = transferRepository.findByID(toAccount);// достаем наш аккаунт из БД в данном случае из MAP<>
-        Optional<Account> fromAccountoptional = transferRepository.findByID(fromAccount);
+        Optional<Account> toAccountOptional = transferRepository.findByID(toAccountId);// достаем наш аккаунт из БД в данном случае из MAP<>
+        Optional<Account> fromAccountoptional = transferRepository.findByID(fromAccountId);
 
 
         if (toAccountOptional.isEmpty() || fromAccountoptional.isEmpty()) {
             return TransferStatus.ACCOUNT_NOT_FOUND;
         }
-        Account toaccount = toAccountOptional.get(); // счет получателя
-        Account fromaccount = fromAccountoptional.get();// счет отправителя
 
-
-        if (toaccount.isFrozen() || fromaccount.isFrozen()) {
+        if (toAccountOptional.get().isFrozen() || fromAccountoptional.get().isFrozen()) {
             return TransferStatus.ACCOUNT_FROZEN; // если один из счетов заблокирован
         }
 
-        if (toaccount.getAccountID() == fromaccount.getAccountID()) {
+        if (toAccountOptional.get().getAccountID() == fromAccountoptional.get().getAccountID()) {
             return TransferStatus.SAME_ACCOUNT_TRANSFER; // если один и тот же счет
         }
 
@@ -56,19 +53,19 @@ public class TransferServerImpl implements TransferServer {
             return TransferStatus.INVALID_AMOUNT; // если сумма транзакции отрицательная
         }
 
-        if (amount.compareTo(fromaccount.getBalance()) > 0) {
+        if (amount.compareTo(fromAccountoptional.get().getBalance()) > 0) {
             return TransferStatus.INSUFFICIENT_FUNDS; // сумма тарнзанкции больше балана на счету
         }
 
         Account firstLockAccount;
         Account secondLockAccount;
 
-        if (fromAccount < toAccount) { // определяем порядок блокировки
-            firstLockAccount = fromaccount;
-            secondLockAccount = toaccount;
+        if (fromAccountId < toAccountId) { // определяем порядок блокировки
+            firstLockAccount = fromAccountoptional.get();
+            secondLockAccount = toAccountOptional.get();
         } else {
-            firstLockAccount = toaccount;
-            secondLockAccount = fromaccount;
+            firstLockAccount = toAccountOptional.get();
+            secondLockAccount = fromAccountoptional.get();
         }
 
 
@@ -79,20 +76,20 @@ public class TransferServerImpl implements TransferServer {
         try {
             secondLock.lock();
             try {
-                BigDecimal fromAccountBalance = fromaccount.getBalance(); // повторная проверка на наличие денег на счету
+                BigDecimal fromAccountBalance = fromAccountoptional.get().getBalance(); // повторная проверка на наличие денег на счету
                 if(amount.compareTo(fromAccountBalance)>0) {
                     return TransferStatus.INSUFFICIENT_FUNDS;
                 }
 
-                BigDecimal newBalace = fromAccountBalance.subtract(amount); // списание денег со чета
-                fromaccount.setBalance(newBalace);
+                BigDecimal newBalanceFromBalance = fromAccountBalance.subtract(amount); // списание денег со чета
+                fromAccountoptional.get().setBalance(newBalanceFromBalance);
 
-                BigDecimal newBalanceForToAccount = toaccount.getBalance(); // зачисление денег на другой счет
+                BigDecimal newBalanceForToAccount = toAccountOptional.get().getBalance(); // зачисление денег на другой счет
                 BigDecimal toAccontNewBalance = newBalanceForToAccount.add(amount);
-                toaccount.setBalance(toAccontNewBalance);
+                toAccountOptional.get().setBalance(toAccontNewBalance);
 
-                transferRepository.saveAccount(fromaccount);
-                transferRepository.saveAccount(toaccount);
+                transferRepository.saveAccount(fromAccountoptional.get());
+                transferRepository.saveAccount(fromAccountoptional.get());
 
             } finally {
                 secondLock.unlock();

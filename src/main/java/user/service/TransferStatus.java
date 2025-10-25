@@ -3,6 +3,7 @@ package user.service;
 public enum TransferStatus {
 
     SUCCESS,
+    INVALID_REQUEST,
     ACCOUNT_NOT_FOUND, // не найден
     ACCOUNT_FROZEN, // (для любого из счетов)
     INVALID_AMOUNT, //(сумма не положительная)
